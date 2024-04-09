@@ -1,0 +1,72 @@
+service: microservice
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'stg'}
+  stackName: '${self:service}'
+  region: ${opt:region, 'us-east-1'}
+  runtime: nodejs18.x
+
+functions:
+  authorizer:
+    handler: lambda/authorizer.handler
+    environment:
+      API_KEY: YR7bhB95K7PRIf8eJ8ccIiP1oOOUX74TAf6iT4TYO3gUvsVHfl
+    
+resources:
+  Resources:
+    MicroserviceHttpApi:
+      Type: AWS::ApiGatewayV2::Api
+      Properties:
+        Name: MicroserviceHttpApi
+        ProtocolType: HTTP
+
+    MicroserviceHttpApiStage:
+      Type: AWS::ApiGatewayV2::Stage
+      Properties:
+        ApiId: !Ref MicroserviceHttpApi
+        StageName: ${self:provider.stage}
+        AutoDeploy: true
+
+    MicroserviceHttpApiDeployment:
+      Type: AWS::ApiGatewayV2::Deployment
+      Properties:
+        ApiId: !Ref MicroserviceHttpApi
+        StageName: !Ref MicroserviceHttpApiStage
+
+    AuthorizerLambdaFunctionInvokePermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+        FunctionName: !GetAtt AuthorizerLambdaFunction.Arn
+        Action: lambda:InvokeFunction
+        Principal: apigateway.amazonaws.com
+
+    MicroserviceAuthorizer:
+      Type: AWS::ApiGatewayV2::Authorizer
+      Properties:
+        Name: MicroserviceAuthorizer
+        ApiId: !Ref MicroserviceHttpApi
+        AuthorizerType: REQUEST
+        AuthorizerPayloadFormatVersion: "2.0"
+        EnableSimpleResponses: true
+        IdentitySource:
+          - $request.header.X-API-Key
+        AuthorizerUri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt AuthorizerLambdaFunction.Arn
+
+    HttpApiIdParameter:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Name: /microservice/http-api-id
+        Type: String
+        Value: !Ref MicroserviceHttpApi
+        Description: Id of the HTTP API
+
+    AuthorizerIdParameter:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Name: /microservice/authorizer-id
+        Type: String
+        Value: !Ref MicroserviceAuthorizer
+        Description: Id of the Authorizer

@@ -1,0 +1,22 @@
+service: microservice-test
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'stg'}
+  stackName: '${self:service}'
+  region: ${opt:region, 'us-east-1'}
+  runtime: nodejs18.x
+  httpApi:
+    id: ${ssm:/microservice/http-api-id}
+
+functions:
+
+  test-method:
+    handler: lambda/test-method.handler    
+    events:
+      - httpApi:
+          path: /test-method
+          method: get
+          authorizer:            
+            type: request
+            id: ${ssm:/microservice/authorizer-id}
